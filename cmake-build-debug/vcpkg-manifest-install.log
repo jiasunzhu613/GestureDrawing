@@ -1,0 +1,2 @@
+Failed to load manifest from directory /Users/jonathanzhu/CLionProjects/GestureDrawing
+try_read_contents("/Users/jonathanzhu/CLionProjects/GestureDrawing/vcpkg.json"): No such file or directorynote: updating vcpkg by rerunning bootstrap-vcpkg may resolve this failure.

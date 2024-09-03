@@ -1,0 +1,12 @@
+[
+{
+  "directory": "/Users/jonathanzhu/CLionProjects/GestureDrawing/cmake-build-debug",
+  "command": "/Library/Developer/CommandLineTools/usr/bin/c++ -isystem /Users/jonathanzhu/CLionProjects/GestureDrawing/vcpkg/installed/x64-osx/include -iframework /Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk/System/Library/Frameworks -g -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk -mmacosx-version-min=13.6 -fcolor-diagnostics -std=gnu++20 -o CMakeFiles/GestureDrawing.dir/main.cpp.o -c /Users/jonathanzhu/CLionProjects/GestureDrawing/main.cpp",
+  "file": "/Users/jonathanzhu/CLionProjects/GestureDrawing/main.cpp"
+},
+{
+  "directory": "/Users/jonathanzhu/CLionProjects/GestureDrawing/cmake-build-debug",
+  "command": "/Library/Developer/CommandLineTools/usr/bin/c++ -isystem /Users/jonathanzhu/CLionProjects/GestureDrawing/vcpkg/installed/x64-osx/include -iframework /Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk/System/Library/Frameworks -g -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk -mmacosx-version-min=13.6 -fcolor-diagnostics -std=gnu++20 -o CMakeFiles/demo.dir/demo.cpp.o -c /Users/jonathanzhu/CLionProjects/GestureDrawing/demo.cpp",
+  "file": "/Users/jonathanzhu/CLionProjects/GestureDrawing/demo.cpp"
+}
+]

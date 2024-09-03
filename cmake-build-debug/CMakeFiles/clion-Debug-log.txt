@@ -1,0 +1,4 @@
+/Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/Applications/CLion.app/Contents/bin/ninja/mac/ninja -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -G Ninja -S /Users/jonathanzhu/CLionProjects/GestureDrawing -B /Users/jonathanzhu/CLionProjects/GestureDrawing/cmake-build-debug
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /Users/jonathanzhu/CLionProjects/GestureDrawing/cmake-build-debug

@@ -1,9 +1,0 @@
-/Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/Applications/CLion.app/Contents/bin/ninja/mac/ninja -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -G Ninja -S /Users/jonathanzhu/CLionProjects/GestureDrawing -B /Users/jonathanzhu/CLionProjects/GestureDrawing/cmake-build-debug
-CMake Error at CMakeLists.txt:36 (target_link_libraries):
-  Cannot specify link libraries for target "main" which is not built by this
-  project.
-
-
--- Configuring incomplete, errors occurred!
-See also "/Users/jonathanzhu/CLionProjects/GestureDrawing/cmake-build-debug/CMakeFiles/CMakeOutput.log".
-See also "/Users/jonathanzhu/CLionProjects/GestureDrawing/cmake-build-debug/CMakeFiles/CMakeError.log".

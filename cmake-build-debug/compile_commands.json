@@ -1,8 +1,0 @@
-[
-{
-  "directory": "/Users/jonathanzhu/clionprojects/GestureDrawing/cmake-build-debug",
-  "command": "/Library/Developer/CommandLineTools/usr/bin/c++ -isystem /Users/jonathanzhu/clionprojects/GestureDrawing/vcpkg/packages/glad_arm64-osx/include -isystem /Users/jonathanzhu/clionprojects/GestureDrawing/vcpkg/packages/glfw3_arm64-osx/include -isystem /Users/jonathanzhu/clionprojects/GestureDrawing/vcpkg/packages/imgui_arm64-osx/include -iframework /Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk/System/Library/Frameworks -g -std=gnu++20 -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk -mmacosx-version-min=13.6 -fcolor-diagnostics -o CMakeFiles/GestureDrawing.dir/main.cpp.o -c /Users/jonathanzhu/clionprojects/GestureDrawing/main.cpp",
-  "file": "/Users/jonathanzhu/clionprojects/GestureDrawing/main.cpp",
-  "output": "CMakeFiles/GestureDrawing.dir/main.cpp.o"
-}
-]

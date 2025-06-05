@@ -1,0 +1,14 @@
+[
+{
+  "directory": "/Users/jonathanzhu/clionprojects/GestureDrawing/build",
+  "command": "/Library/Developer/CommandLineTools/usr/bin/c++  -isystem /Users/jonathanzhu/clionprojects/GestureDrawing/vcpkg/packages/glad_arm64-osx/include -isystem /Users/jonathanzhu/clionprojects/GestureDrawing/vcpkg/packages/glfw3_arm64-osx/include -isystem /Users/jonathanzhu/clionprojects/GestureDrawing/vcpkg/packages/imgui_arm64-osx/include -iframework /Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk/System/Library/Frameworks -isystem /opt/homebrew/include/postgresql@14 -isystem /opt/homebrew/include/postgresql@14/server -isystem /Users/jonathanzhu/clionprojects/GestureDrawing/vcpkg/packages/fmt_arm64-osx/include -std=gnu++20 -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk -o CMakeFiles/GestureDrawing.dir/base64.cpp.o -c /Users/jonathanzhu/clionprojects/GestureDrawing/base64.cpp",
+  "file": "/Users/jonathanzhu/clionprojects/GestureDrawing/base64.cpp",
+  "output": "CMakeFiles/GestureDrawing.dir/base64.cpp.o"
+},
+{
+  "directory": "/Users/jonathanzhu/clionprojects/GestureDrawing/build",
+  "command": "/Library/Developer/CommandLineTools/usr/bin/c++  -isystem /Users/jonathanzhu/clionprojects/GestureDrawing/vcpkg/packages/glad_arm64-osx/include -isystem /Users/jonathanzhu/clionprojects/GestureDrawing/vcpkg/packages/glfw3_arm64-osx/include -isystem /Users/jonathanzhu/clionprojects/GestureDrawing/vcpkg/packages/imgui_arm64-osx/include -iframework /Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk/System/Library/Frameworks -isystem /opt/homebrew/include/postgresql@14 -isystem /opt/homebrew/include/postgresql@14/server -isystem /Users/jonathanzhu/clionprojects/GestureDrawing/vcpkg/packages/fmt_arm64-osx/include -std=gnu++20 -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk -o CMakeFiles/GestureDrawing.dir/main.cpp.o -c /Users/jonathanzhu/clionprojects/GestureDrawing/main.cpp",
+  "file": "/Users/jonathanzhu/clionprojects/GestureDrawing/main.cpp",
+  "output": "CMakeFiles/GestureDrawing.dir/main.cpp.o"
+}
+]

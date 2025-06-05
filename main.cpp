@@ -8,24 +8,56 @@
 // - Introduction, links and more at the top of imgui.cpp
 // #define IMGUI_DEFINE_MATH_OPERATORS 
 #include "imconfig.h"
-#include "vcpkg/vcpkg_installed/x64-osx/include/imgui.h"
-#include "vcpkg/vcpkg_installed/x64-osx/include/imgui_impl_glfw.h"
-#include "vcpkg/vcpkg_installed/x64-osx/include/imgui_impl_opengl3.h"
-#include "vcpkg/vcpkg_installed/x64-osx/include/imgui_internal.h"
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+#include "imgui_internal.h"
+#include "base64.h"
+// add libpq postgreSQL API to project
+#include "libpq-fe.h"
+#include "fmt/core.h"
+// #include "postgres_ext.h"
+// #include "ImGuiFileDialog/ImGuiFileDialog.h"
 #include <algorithm>
 #include <cfloat>
 #include <climits>
+#include <cstdlib>
 #include <ostream>
 #include <vector>
 #include <stdio.h>
 #define _CRT_SECURE_NO_WARNINGS
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+// stored in /usr/local/var/postgresql@15
+/*
+This formula has created a default database cluster with:
+  initdb --locale=C -E UTF-8 /usr/local/var/postgresql@15
+
+postgresql@15 is keg-only, which means it was not symlinked into /usr/local,
+because this is an alternate version of another formula.
+
+If you need to have postgresql@15 first in your PATH, run:
+  echo 'export PATH="/usr/local/opt/postgresql@15/bin:$PATH"' >> /Users/jonathanzhu/.bash_profile
+
+For compilers to find postgresql@15 you may need to set:
+  export LDFLAGS="-L/usr/local/opt/postgresql@15/lib"
+  export CPPFLAGS="-I/usr/local/opt/postgresql@15/include"
+
+For pkg-config to find postgresql@15 you may need to set:
+  export PKG_CONFIG_PATH="/usr/local/opt/postgresql@15/lib/pkgconfig"
+
+To restart postgresql@15 after an upgrade:
+  brew services restart postgresql@15
+Or, if you don't want/need a background service you can just run:
+  LC_ALL="C" /usr/local/opt/postgresql@15/bin/postgres -D /usr/local/var/postgresql@15
+*/
+// #include "libpq-fe.h"
 #define GL_SILENCE_DEPRECATION
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <GLES2/gl2.h>
 #endif
-#include "vcpkg/vcpkg_installed/x64-osx/include/GLFW/glfw3.h" // Will drag system OpenGL headers
+#include <GLFW/glfw3.h> // Will drag system OpenGL headers
 
 // custom widgets
 // #include "./progressBar.cpp"
@@ -36,9 +68,14 @@
 #include <sys/stat.h>
 #include <iostream>
 #include <fstream>
+#include <chrono>
+#include <regex>
+#include <format>
 
 using std::cout;
 using std::endl;
+
+#define USER "/Users/"
 
 //TODO: 
 //have minimum size for window 
@@ -67,6 +104,7 @@ bool LoadTextureFromMemory(const void* data, size_t data_size, GLuint* out_textu
     int image_width = 0;
     int image_height = 0;
     unsigned char* image_data = stbi_load_from_memory((const unsigned char*)data, (int)data_size, &image_width, &image_height, NULL, 4);
+    cout << image_data << endl;
     if (image_data == NULL)
         return false;
 
@@ -86,6 +124,7 @@ bool LoadTextureFromMemory(const void* data, size_t data_size, GLuint* out_textu
     *out_width = image_width;
     *out_height = image_height;
 
+
     return true;
 }
 
@@ -104,6 +143,14 @@ bool LoadTextureFromFile(const char* file_name, GLuint* out_texture, int* out_wi
     fread(file_data, 1, file_size, f);
     bool ret = LoadTextureFromMemory(file_data, file_size, out_texture, out_width, out_height);
     IM_FREE(file_data);
+    return ret;
+}
+
+bool LoadTextureFromBase64(std::string base64, GLuint* out_texture, int* out_width, int* out_height)
+{
+    // decode then forward into Loadtexturefrom memory?
+    std::string decoded = base64_decode(base64);
+    bool ret = LoadTextureFromMemory(decoded.data(), decoded.size(), out_texture, out_width, out_height);
     return ret;
 }
 
@@ -143,6 +190,81 @@ float GetButtonCenteringOffset(std::vector<char*> labels) {
     
     float off = (avail - buttonCenteringOffset) * 0.5f;
     return off;
+}
+
+namespace ImGui {
+    void Z_Image(ImTextureID user_texture_id, const ImVec2& image_size, ImVec2& uv0, ImVec2& uv1, 
+                 const ImVec4& tint_col = ImVec4(1, 1, 1, 1), const ImVec4& border_col = ImVec4(0, 0, 0, 0)) 
+    {
+        ImGuiWindow* window = ImGui::GetCurrentWindow();
+        if (window->SkipItems)
+            return;
+        
+        ImGuiIO& IO = ImGui::GetIO();
+        ImDrawList* drawlist = ImGui::GetWindowDrawList();
+        
+        //NOTE: make sure to use GetCursorScreenPos here instead of GetCursorPos, GetCursorScreenPos returns the cursor in window
+        ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+        //TODO: add border rect
+        drawlist->AddImage((void*)(intptr_t)user_texture_id, cursor_pos, cursor_pos + image_size, ImVec2(uv0[0], uv0[1]), ImVec2(uv1[0], uv1[1]), ImGui::GetColorU32(tint_col));
+        ImGui::InvisibleButton("image", image_size);
+        
+        const bool is_hovered = ImGui::IsItemHovered();
+        const bool is_held = ImGui::IsItemActive();
+
+        //UV texture coordinates in decimal form allows it to be used as a zoom ratio to find how much we've zoomed in to the image
+        float zoom_ratio = (uv1[0] - uv0[0]) * 1.5f; // 1.5f factor applied just to make the zoom drag speed a little faster 
+        //TODO: probably need a scale factor for one dimension of the image
+
+        // Move zoomed image on drag
+        if (is_held) {
+            float x_dist = uv1[0] - uv0[0];
+            float y_dist = uv1[1] - uv0[1];
+            ImVec2 mouse_delta = IO.MouseDelta * 0.002f * zoom_ratio;
+            // cout << mouse_delta[0] << " " << mouse_delta[1] << endl;
+            
+            uv0[0] = fmax(0.0f, fmin(1.0f - x_dist, uv0[0] - mouse_delta.x));
+            uv0[1] = fmax(0.0f, fmin(1.0f - y_dist, uv0[1] - mouse_delta.y));
+            uv1[0] = fmin(1.0f, fmax(0.0f + x_dist, uv1[0] - mouse_delta.x)); 
+            uv1[1] = fmin(1.0f, fmax(0.0f + y_dist, uv1[1] - mouse_delta.y)); 
+        }
+        
+        // Zoom in/out on image on scroll
+        if (is_hovered) {
+            float mouse_wheel_delta = IO.MouseWheel * 0.005f;
+            
+            // clamp uv0 and uv1 final position so that image does not flip
+            float x_clamp = (uv0[0] + uv1[0]) / 2.0f;
+            float y_clamp = (uv0[1] + uv1[1]) / 2.0f;
+            // uv0 reached a border, so we wait for uv1 to reach a border as well (therefore we only increment uv1)
+            if ((uv0[0] == 0.0f || uv0[1] == 0.0f) && (uv1[0] != 1.0f && uv1[1] != 1.0f)) { 
+                uv1[0] = fmin(1.0f, fmax(x_clamp, uv1[0] + mouse_wheel_delta));
+                uv1[1] = fmin(1.0f, fmax(y_clamp, uv1[1] + mouse_wheel_delta));
+            } 
+            //uv1 reached a border, so we wait for uv0 to reach a border as well (therefore we only increment uv0)
+            else if ((uv1[0] == 1.0f || uv1[1] == 1.0f) && (uv0[0] != 0.0f && uv0[1] != 0.0f)) {
+                uv0[0] = fmax(0.0f, fmin(x_clamp, uv0[0] - mouse_wheel_delta));
+                uv0[1] = fmax(0.0f, fmin(y_clamp, uv0[1] - mouse_wheel_delta));
+            }
+            else {
+                uv0[0] = fmax(0.0f, fmin(x_clamp, uv0[0] - mouse_wheel_delta));
+                uv0[1] = fmax(0.0f, fmin(y_clamp, uv0[1] - mouse_wheel_delta));
+                uv1[0] = fmin(1.0f, fmax(x_clamp, uv1[0] + mouse_wheel_delta));
+                uv1[1] = fmin(1.0f, fmax(y_clamp, uv1[1] + mouse_wheel_delta));
+            }
+        }
+    }
+}
+
+void resetTimer() {
+    
+}
+
+// PostgreSQL exit nicely. (Why does it need static though?)
+static void exit_nicely(PGconn *conn)
+{
+    PQfinish(conn);
+    exit(1);
 }
 
 // Main code
@@ -245,14 +367,83 @@ int main(int, char**)
     int* image_heights = new int[MAX]{};
     GLuint* image_textures= new GLuint[MAX]{};
     //TODO: add support for different os
-    int image_count = LoadImages("/Users/jonathanzhu/Desktop/GestureImages/", image_textures, image_widths, image_heights); // remember to use ./ not ../ for paths in same dir
+    std::string user = getenv("USER");
+    // const std::string USER = "/Users/";
+    std::string prefix = USER + user + "/";
+    // std::string file_path = prefix;
+    // std::string file = "/Users/" + user + "/Desktop/GestureImages"; 
+    // cout << file << endl; 
+    // int image_count = LoadImages(file.c_str(), image_textures, image_widths, image_heights); // remember to use ./ not ../ for paths in same dir
+    int image_count;
     std::cout << image_count << std::endl;
 
     ImGuiContext& g = *GImGui;
+    ImGuiWindow* curr_window = g.CurrentWindow;
     const ImGuiStyle& style = g.Style;
-
     const std::vector<char*> buttonNames{"Prev", "Pause", "Next"}; //TODO: fix? 
 
+    ImVec2 uv0 = ImVec2(0.0f, 0.0f);
+    ImVec2 uv1 = ImVec2(1.0f, 1.0f);
+
+    int paused = 0;
+    int was_paused = 0;
+    float time_in_minutes = 5.0f;
+    double time_limit = time_in_minutes * 60.0f;
+    auto start_time{std::chrono::steady_clock::now()};
+    auto end_time{std::chrono::steady_clock::now()};
+    double prev_elapsed_time_sum{0.0f};
+
+    int session_started = 0;
+    
+    char file_path[64];
+    std::vector<std::filesystem::directory_entry> entries{};
+
+    // Connect to PostgreSQL Db
+    const char *connInfo = "host=localhost port=5432 dbname=GestureDrawingDb user=appuser password=123";
+    PGconn *conn;
+    PGresult *res;
+    int nFields;
+    // Make connection to DB
+    conn = PQconnectdb(connInfo);
+    // Check if db was connected successfully
+    if (PQstatus(conn) != CONNECTION_OK)
+    {
+        //print error then exit nicely
+        fprintf(stderr, "Connection to database failed: %s",
+                PQerrorMessage(conn));
+        exit_nicely(conn);
+    }
+
+    res = PQexec(conn, "SELECT pg_catalog.set_config('search_path', '', false)");
+    if (PQresultStatus(res) != PGRES_TUPLES_OK)
+    {
+        // print error then exit nicely
+        fprintf(stderr, "SET failed: %s", PQerrorMessage(conn));
+        PQclear(res);
+        exit_nicely(conn);
+    }
+
+    /*
+
+     * Clear PGresult whenevr not needed anymore! this helps to prevent memory leaks.
+     */
+    PQclear(res);
+
+    // Testing Postgresql Features
+    int queried = 0;
+    char* image_data;
+    int image_height;
+    int image_width;
+    GLuint image_texture;
+
+
+
+
+
+
+
+    
+    // ImDrawList* drawlist = ImGui::GetWindowDrawList();
 
     // Main loop
 #ifdef __EMSCRIPTEN__
@@ -279,56 +470,277 @@ int main(int, char**)
         // ImFont* font = ImGui::GetDefaultFont();
         // font->FontSize = 0.1f * windowSize.y;
 
-        ImGui::Begin("OpenGL Texture Text");
-        
-        ImVec2 avail = ImGui::GetContentRegionAvail();
-        cout << avail.x << " " << avail.y << endl;
-        const float NONIMAGERATIO = 0.1f;
+        // Testing PGSQL 
+        ImGui::SetNextWindowSizeConstraints(ImVec2(200, 200), ImVec2(FLT_MAX, FLT_MAX));
+        ImGui::Begin("PGSQL");
+        if (ImGui::Button("Add Image"))
+        {
+            std::string image_path = USER + user + "/desktop/GestureImages/de5f969b107abf8fb70f4828101b063c.jpg";
+            // read binary from image file
+            FILE* f = fopen(image_path.c_str(), "rb");
+            if (f == NULL)
+                return false;
+            fseek(f, 0, SEEK_END);
+            size_t file_size = (size_t)ftell(f);
+            if (file_size == -1)
+                return false;
+            fseek(f, 0, SEEK_SET);
+            void* file_data = IM_ALLOC(file_size);
+            fread(file_data, 1, file_size, f);
+            // cout << (long) file_data << endl;
+            // cout << (void*) (long) file_data << endl; // can cast to long then back to void* and retain information
+            cout << (const unsigned char*) file_data << endl;
+            std::string base64_image_source = base64_encode(reinterpret_cast<unsigned char*>(file_data), file_size);
+            //TODO:  add variables for the category and imagebinary field
+            std::string formatted = fmt::format("INSERT INTO public.images (category, imageinformation) VALUES ({}, '{}')", "'Figure'", base64_image_source);
+            const char *command = formatted.c_str();
+            res = PQexec(conn, command);
+            IM_FREE(file_data);
+            /*
+            https://www.postgresql.org/docs/7.0/libpq-chapter22422.htm
+            PGRES_COMMAND_OK -- Successful completion of a command returning no data
+            PGRES_TUPLES_OK -- The query successfully executed
+            */
+            if (PQresultStatus(res) != PGRES_COMMAND_OK)
+            {
+                fprintf(stderr, "INSERT failed: %s", PQerrorMessage(conn)); // Note: fprintf prints into stderr error file but will also output into console!
+                PQclear(res);
+                exit_nicely(conn);
+            }
+            PQclear(res);
+            cout << "Hello this will add an image!" << endl;
+        }
+        if (ImGui::Button("Query Images"))
+        {
+            /*
+            Fetch all columns from "Images" db
+            */
+            
+            /*
+            query used: select current_database(), current_user, current_setting('search_path')
+            result from query in terminal:  GestureDrawingDb | jonathanzhu  | "$user", public
+
+            result from libpq query: current_databasecurrent_user   current_setting  GestureDrawingDbappuser  
+
+
+            query used: select relname, relnamespace::regnamespace from pg_class where lower(relname) = 'images';
+            result from query in terminal:  images  | public
+            result from query in libpq: relname        relnamespace   images         public  
+            */
+            const char *command = "SELECT * FROM public.images WHERE id = 39"; // NOTE: need the public keyword in front for query 
+            res = PQexec(conn, command);
+            if (PQresultStatus(res) != PGRES_TUPLES_OK)
+            {
+                // print error then exit nicely
+                fprintf(stderr, "SET failed: %s", PQerrorMessage(conn));
+                PQclear(res);
+                exit_nicely(conn);
+            }
+
+            /* first, print out the attribute names */
+            // nFields = PQnfields(res);
+            // for (int i = 0; i < nFields; i++)
+            //     // NOTE: %15s prints the word with a total length of 15, if the word is longer, 
+            //     //the whole word will be printed! -15 prints spaces behind word instead of in front
+            //     printf("%-15s", PQfname(res, i)); 
+            // printf("\n\n");
+
+            // /* next, print out the rows */
+            // for (int i = 0; i < PQntuples(res); i++)
+            // {
+            //     for (int j = 0; j < nFields; j++)
+            //         printf("%-15s", PQgetvalue(res, i, j));
+            //     printf("\n");
+            // }
+            
+            std::string image_data = PQgetvalue(res, 0, 6);
+            cout << image_data << endl;
+            bool ret = LoadTextureFromBase64(image_data, &image_texture, &image_width, &image_height);
+            IM_ASSERT(ret);
+            cout << "hi loaded" << endl;
+            // char* _image_data = stbi_zlib_decode_noheader_malloc(image_data.c_str());
+            queried = 1;
+        }
+        if (queried){
+            ImGui::Image((void*) (intptr_t) image_texture, ImVec2(image_width, image_height));
+        }
+        ImGui::End();
+
+        ImGui::SetNextWindowSizeConstraints(ImVec2(200, 200), ImVec2(FLT_MAX, FLT_MAX));
+        ImGui::Begin("Gesture Drawing");
+
+        // const float NONIMAGERATIO = 0.1f;
         // std::cout << windowSize.y << " " << windowSize.x << " " << NONIMAGERATIO * windowSize.y << std::endl;
-        //Progress bar
-        // ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-        ImGui::ProgressBar(0.5);
-        // ImGui::PopStyleVar();
-        // ImVec2(-FLT_MIN, NONIMAGERATIO * windowSize.y - style.FramePadding.y * 2.0f)
-        //Images 
-        float widthFactor = image_widths[CURR_IND] / (avail.x * 0.95f);
-        float heightFactor = image_heights[CURR_IND] / (avail.y * 0.85f); 
-        // std::cout << widthFactor << " " << heightFactor << std::endl;
-        float scaleFactor = std::max({widthFactor, heightFactor, 1.0f});
-        // cout << scaleFactor << endl; 
-        ImVec2 imageSize = ImVec2(image_widths[CURR_IND] / scaleFactor, image_heights[CURR_IND] / scaleFactor);
-        
-        // std::cout << avail.y << " " << avail.x << " " << imageSize[1] << " " << imageSize[0] << std::endl;
-        ImGui::SetCursorPosX((avail.x - imageSize.x) * 0.5f);
-        ImGui::Image((void*)(intptr_t)image_textures[CURR_IND], ImVec2(imageSize[0], imageSize[1]));
-        // ImGui::NewLine();
-        // ImGui::Image((void*)(intptr_t)image_textures[CURR_IND], ImVec2(300, 300));
-        
-        int i = 0; 
-        ImGui::SetCursorPosX(GetButtonCenteringOffset(buttonNames));
-        // , ImVec2(0.0f, NONIMAGERATIO * windowSize.y - style.FramePadding.y * 2.0f)
-        //Prev button
-        if (ImGui::Button(buttonNames[i])) { //TODO: remove if there is no timer (?)
-                CURR_IND--; 
-        }
-        ImGui::SameLine(); i++;
+        if (!session_started) {
+            //Time limit slider (have buttons for common time limits and link the buttons up with the slider) 
+            if (ImGui::Button("1min")) {
+                time_in_minutes = 1.0f;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("3min")) {
+                time_in_minutes = 3.0f;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("5min")) {
+                time_in_minutes = 5.0f;
+            }
+            ImGui::SliderFloat("Time Limit in Minutes", &time_in_minutes, 0.0f, 10.0f, "%.1f");
+            //File browsing system
+            // ImGui::SetKeyboardFocusHere();
+            ImGui::InputText("File Path", file_path, IM_ARRAYSIZE(file_path));
+            if(ImGui::IsItemActive()) {
+                //NOTE: GetCursorPos returns position of cursor inside current window, so we need to add the current window position by using GetWindowPos
+                // ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+                ImGui::OpenPopup("Autocomplete");
+            } else {
+                ImGui::CloseCurrentPopup();
+            }
 
-        //Pause button
-        if (ImGui::Button(buttonNames[i])) { //TODO: push flag to deactivate when it gets to last image
-        }
-        ImGui::SameLine(); i++;
+            // if (ImGui::IsWindowAppearing())
+            //     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+            //Set popup position and size
+            ImGui::SetNextWindowPos(ImGui::GetCursorPos() + ImGui::GetWindowPos());
+            ImVec2 popup_constraint = ImVec2(0.5f * ImGui::GetWindowSize().x, 0.5f * ImGui::GetWindowSize().y);
+            ImGui::SetNextWindowSizeConstraints(popup_constraint, popup_constraint);
+            if (ImGui::BeginPopup("Autocomplete", ImGuiWindowFlags_NoFocusOnAppearing)) {
+                if (std::filesystem::exists(prefix + file_path)) {
+                    entries.clear();
+                    for (auto const& entry : std::filesystem::directory_iterator{prefix + file_path}) {
+                        if (entry.path().c_str()[prefix.length()] != '.')
+                            entries.push_back(entry);
+                    }
+                    std::sort(entries.begin(), entries.end());
+                }
+                for (auto const& entry : entries){
+                    std::filesystem::path outpath = entry.path();
+                    std::string suggestion = outpath.string().substr(prefix.length()) + "/"; //TODO: convert to regex eventually
 
-        //Next button
-        if (ImGui::Button(buttonNames[i])) { //TODO: push flag to deactive when at first image 
+                    std::string temp = prefix + file_path;
+                    int ind = temp.find_last_of("/");
+                    std::string entered_latest = temp.substr(ind + 1); 
+                    std::string regex_rule = entered_latest.empty() ? "[a-z]" : entered_latest; 
+                    std::regex rule{regex_rule, std::regex_constants::icase};
+                    // cout << regex_rule << endl;
+                    if (std::regex_search(suggestion, rule)) {
+                        if(ImGui::Selectable(suggestion.c_str())){
+                            strcpy(file_path, suggestion.c_str());
+                        } 
+                        // cout << file_path << endl;
+                    }
+                }
+                ImGui::EndPopup();
+            } 
+
+            // NOTE: strcmp returns 0 if strings are equal
+            bool disable_start_button = !std::filesystem::exists(prefix + file_path) || strcmp(file_path, "") == 0; //TODO: check if all files are images, maybe also give red text with problem for user 
+
+            ImGui::BeginDisabled(disable_start_button);
+            if (ImGui::Button("Start Session")) {
+                start_time = std::chrono::steady_clock::now();
+                end_time = std::chrono::steady_clock::now();
+                image_count = LoadImages((prefix + file_path).c_str(), image_textures, image_widths, image_heights);
+                for (int i = 0; i < image_count; i++){
+                    cout << image_textures[i] << endl;
+                }
+                session_started = true;
+                memset(file_path, 0, sizeof(file_path));
+            }
+            ImGui::EndDisabled();
+        }
+        else {
+            // Progress bar
+            // ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+            // TODO:: PLEASE FIX THIS TIMER THING, IT LOOKS SO GROSS
+            std::chrono::duration<double> current_elapsed_time{end_time - start_time};
+            if (current_elapsed_time.count() + prev_elapsed_time_sum > time_limit) {
+                start_time = std::chrono::steady_clock::now();
+                end_time = std::chrono::steady_clock::now();
                 CURR_IND++;
+            }
+            if (paused && !was_paused){
+                prev_elapsed_time_sum += current_elapsed_time.count();
+            } 
+            if (paused) {
+                current_elapsed_time = std::chrono::duration<double>::zero();
+                start_time = std::chrono::steady_clock::now();
+                end_time = std::chrono::steady_clock::now();
+            }
+            if (!paused && was_paused){
+                start_time = std::chrono::steady_clock::now();
+            } 
+            if (!paused){
+                end_time = std::chrono::steady_clock::now();
+            }
+            was_paused = paused;
+            ImGui::ProgressBar((current_elapsed_time.count() + prev_elapsed_time_sum) / time_limit);
+            // ImGui::PopStyleVar();
+            // ImVec2(-FLT_MIN, NONIMAGERATIO * windowSize.y - style.FramePadding.y * 2.0f)
+            // Quit button
+            if (ImGui::Button("Quit")) {
+                session_started = false;
+            }
+            ImGui::SameLine();
+
+            int i = 0; 
+            ImGui::SetCursorPosX(GetButtonCenteringOffset(buttonNames));
+            // , ImVec2(0.0f, NONIMAGERATIO * windowSize.y - style.FramePadding.y * 2.0f)
+            //Prev button
+            bool disable_prev = CURR_IND == 0;
+            ImGui::BeginDisabled(disable_prev);
+            if (ImGui::Button(buttonNames[i])) { //TODO: remove if there is no timer (?)
+                paused = 0;
+                was_paused = 0;
+                prev_elapsed_time_sum = 0.0f;
+                start_time = std::chrono::steady_clock::now();
+                end_time = std::chrono::steady_clock::now();
+                CURR_IND--; 
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine(); i++;
+
+            //Pause button
+            if (ImGui::Button(buttonNames[i])) { //TODO: push flag to deactivate when it gets to last image
+                paused ^= 1;
+            }
+            ImGui::SameLine(); i++;
+
+            //Next button
+            bool disable_next = CURR_IND == image_count - 1;
+            ImGui::BeginDisabled(disable_next);
+            if (ImGui::Button(buttonNames[i])) { //TODO: push flag to deactive when at first image 
+                paused = 0;
+                was_paused = 0;
+                prev_elapsed_time_sum = 0.0f;
+                start_time = std::chrono::steady_clock::now();
+                end_time = std::chrono::steady_clock::now();
+                CURR_IND++;
+            }
+            ImGui::EndDisabled();
+            
+            ImVec2 cursor_pos = ImGui::GetCursorPos();
+            ImVec2 avail = ImGui::GetContentRegionAvail();
+            //Images 
+            float widthFactor = image_widths[CURR_IND] / (avail.x);
+            float heightFactor = image_heights[CURR_IND] / (avail.y); 
+            // std::cout << widthFactor << " " << heightFactor << std::endl;
+            float scaleFactor = std::max({widthFactor, heightFactor, 1.0f});
+            // cout << scaleFactor << endl; 
+            ImVec2 imageSize = ImVec2(image_widths[CURR_IND] / scaleFactor, image_heights[CURR_IND] / scaleFactor);
+            
+            // std::cout << avail.y << " " << avail.x << " " << imageSize[1] << " " << imageSize[0] << std::endl;
+            ImGui::SetCursorPosX((avail.x - imageSize.x) * 0.5f + style.ItemSpacing.x);
+            ImGui::SetCursorPosY((avail.y - imageSize.y) * 0.5f + cursor_pos.y);
+            ImGui::Z_Image((void*)(intptr_t)image_textures[CURR_IND], ImVec2(imageSize[0], imageSize[1]), uv0, uv1);
+            // ImGui::NewLine();
+            // ImGui::Image((void*)(intptr_t)image_textures[CURR_IND], ImVec2(300, 300));
+            
+            // if (CURR_IND < image_count - 1) {
+            //     if (ImGui::Button("Next")) {
+            //         CURR_IND++;   
+            //     }
+            //    
+            // }
         }
-        ImGui::SameLine(); i++;
-        // if (CURR_IND < image_count - 1) {
-        //     if (ImGui::Button("Next")) {
-        //         CURR_IND++;   
-        //     }
-        //    
-        // }
         ImGui::End();
         // // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
         // if (show_demo_window)
@@ -363,7 +775,6 @@ int main(int, char**)
         // ImGui::Image((void*)(intptr_t)my_image_texture, ImVec2(my_image_width, my_image_height));
         // ImGui::End();
         //
-
         // Rendering
         ImGui::Render();
         // int display_w, display_h;

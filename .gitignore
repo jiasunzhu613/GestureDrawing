@@ -1,0 +1,4 @@
+# IDEs
+/.idea
+/.dist
+cmake-build-debug/

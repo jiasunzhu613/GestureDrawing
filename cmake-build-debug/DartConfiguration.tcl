@@ -4,8 +4,8 @@
 
 
 # Configuration directories and files
-SourceDirectory: /Users/jonathanzhu/CLionProjects/GestureDrawing
-BuildDirectory: /Users/jonathanzhu/CLionProjects/GestureDrawing/cmake-build-debug
+SourceDirectory: /Users/jonathanzhu/clionprojects/GestureDrawing
+BuildDirectory: /Users/jonathanzhu/clionprojects/GestureDrawing/cmake-build-debug
 
 # Where to place the cost data store
 CostDataFile: 
@@ -27,7 +27,7 @@ SubmitInactivityTimeout:
 NightlyStartTime: 00:00:00 EDT
 
 # Commands for the build/test/submit cycle
-ConfigureCommand: "/Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake" "/Users/jonathanzhu/CLionProjects/GestureDrawing"
+ConfigureCommand: "/opt/homebrew/bin/cmake" "/Users/jonathanzhu/clionprojects/GestureDrawing"
 MakeCommand: /Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake --build . --config "${CTEST_CONFIGURATION_TYPE}"
 DefaultCTestConfigurationType: Release
 
@@ -94,6 +94,9 @@ TimeOut: 1500
 # During parallel testing CTest will not start a new test if doing
 # so would cause the system load to exceed this value.
 TestLoad: 
+
+TLSVerify: 
+TLSVersion: 
 
 UseLaunchers: 
 CurlOptions: 

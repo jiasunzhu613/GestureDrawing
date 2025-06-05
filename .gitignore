@@ -1,4 +1,6 @@
 # IDEs
-/.idea
-/.dist
+.idea/
+.dist/
+.vscode/
 cmake-build-debug/
+build/
